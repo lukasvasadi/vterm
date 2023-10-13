@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8"/>
+    <title>iterm</title>
+</head>
+<body>
+<div>
+    <form>
+        <fieldset>
+            <label for="ports">Port</label>
+            <select id="ports">
+                <option hidden disabled selected value></option>
+            </select>
+        </fieldset>
+        <fieldset>
+            <label for="baudrate">Baudrate (bps)</label>
+            <input id="baudrate" type="text" placeholder="115200" value="115200"/>
+        </fieldset>
+        <fieldset>
+            <label for="delimiter">Delimiter</label>
+            <input id="delimiter" type="text" placeholder="\r\n" value="\r\n"/>
+        </fieldset>
+    </form>
+    <button type="submit" id="connect">
+        <i class="fa fa-play"></i>
+    </button>
+    <button type="submit" id="refresh">
+        <i class="fa fa-rotate"></i>
+    </button>
+</div>
+<textarea id="output" readonly></textarea>
+<input id="message" type="text"/>
+</body>
+</html>
