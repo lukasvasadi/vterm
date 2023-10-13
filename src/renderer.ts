@@ -131,6 +131,7 @@ document.getElementById('refresh').onclick = () => {
     textarea.value = ''
     messages = []
     api.closePort()
+    isPortOpen = false
 
     const portStatusNotification = new Notification('Port closed')
     setTimeout(() => portStatusNotification.close(), 3000)
