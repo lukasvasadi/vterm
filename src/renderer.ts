@@ -26,80 +26,115 @@
  * ```
  */
 
-// import "./index.css"
-// import "@fortawesome/fontawesome-free/js/all"
-
-import "./index.css"
-import "@fortawesome/fontawesome-free/js/all"
+import './index.css'
+import '@fortawesome/fontawesome-free/js/all'
 import IpcRendererEvent = Electron.IpcRendererEvent
 
 let isPortOpen = false
+let delimiter = '\n'
+let inc = 0
+let messages: string[] = []
 
 async function getPorts() {
     const ports = await api.getPorts()
-    const select = document.querySelector("select")
+    const select = document.querySelector('select')
 
-    for (const key in ports) {
-        const option = document.createElement("option")
-        if (ports[key].manufacturer) option.text = ports[key].path + " | " + ports[key].manufacturer
-        else option.text = ports[key].path
-        select.add(option)
-    }
+    ports.forEach((port) => {
+        // ignore macOS bluetooth port
+        if (!port.path.includes('Bluetooth-Incoming-Port')) {
+            const option = document.createElement('option')
+            if (port.manufacturer)
+                option.text = port.path + ' | ' + port.manufacturer
+            else option.text = port.path
+            select.add(option)
+        }
+    })
 }
 
 function updateTextarea(data: string) {
-    const textarea = document.querySelector("textarea")
+    const textarea = document.querySelector('textarea')
     textarea.value += data
     textarea.scrollTop = textarea.scrollHeight
 }
 
-api.handleRead((_: IpcRendererEvent, data: string) => updateTextarea(">> " + data))
+api.handleRead((_: IpcRendererEvent, data: string) =>
+    updateTextarea('>> ' + data)
+)
 
-document.getElementById("connect").onclick = () => {
-    const path = document.querySelector("select").value.split(" ", 1)[0]
+document.getElementById('start').onclick = () => {
+    const path = document.querySelector('select').value.split(' ', 1)[0]
     const baudrate = parseInt(
-        (document.getElementById("baudrate") as HTMLInputElement).value
+        (document.querySelector('input[name="baudrate"]') as HTMLInputElement)
+            .value
     )
-    isPortOpen = api.setPort(path, baudrate)
+    delimiter = (
+        document.querySelector('input[name="delimiter"]') as HTMLInputElement
+    ).value
+        .replace(/\\r/g, '\r')
+        .replace(/\\n/g, '\n')
 
-    if (isPortOpen) {
-        const portStatusNotification = new Notification("Device connected!")
-        setTimeout(() => portStatusNotification.close(), 3000)
+    if (path && baudrate) {
+        isPortOpen = api.setPort(path, baudrate, delimiter)
+
+        if (isPortOpen) {
+            const portStatusNotification = new Notification('Device connected!')
+            setTimeout(() => portStatusNotification.close(), 3000)
+        } else {
+            const portStatusNotification = new Notification(
+                'Unable to connect device...',
+                {
+                    body: 'Check that comport is not open in another application.'
+                }
+            )
+            setTimeout(() => portStatusNotification.close(), 3000)
+        }
     } else {
-        const portStatusNotification = new Notification(
-            "Unable to connect device...",
-            {
-                body: "Check that comport is not open in another application.",
-            }
+        const missingDataNotification = new Notification(
+            'Missing device or baudrate data'
         )
-        setTimeout(() => portStatusNotification.close(), 3000)
+        setTimeout(() => missingDataNotification.close(), 3000)
     }
 }
 
-document.getElementById("message").onkeydown = (e: KeyboardEvent) => {
-    if (e.key == "Enter") {
+document.getElementById('message').onkeydown = (e: KeyboardEvent) => {
+    if (e.key == 'Enter') {
         e.preventDefault()
         if (isPortOpen) {
-            const input = document.getElementById("message") as HTMLInputElement
+            const input = document.getElementById('message') as HTMLInputElement
             const data = input.value
 
             if (data) {
-                api.invokeWrite(data)
-                updateTextarea("<< " + data + "\r")
-                input.value = ""
+                api.invokeWrite(data + delimiter)
+                updateTextarea('<< ' + data + '\n')
+                if (data != messages[messages.length - 1]) messages.push(data)
+                inc = 0
+                input.value = ''
             }
         }
+    } else if (e.key == 'ArrowUp' && messages.length) {
+        e.preventDefault()
+        const input = document.getElementById('message') as HTMLInputElement
+        if (inc < messages.length) inc++
+        input.value = messages[messages.length - inc]
+    } else if (e.key == 'ArrowDown' && messages.length) {
+        e.preventDefault()
+        const input = document.getElementById('message') as HTMLInputElement
+        if (inc > 0) inc--
+        if (!inc) input.value = ''
+        else input.value = messages[messages.length - inc]
     }
+    console.log(inc)
 }
 
-document.getElementById("refresh").onclick = () => {
-    const textarea = document.getElementById("output") as HTMLTextAreaElement
-    textarea.value = ""
+document.getElementById('refresh').onclick = () => {
+    const textarea = document.getElementById('output') as HTMLTextAreaElement
+    textarea.value = ''
+    messages = []
     api.closePort()
 
-    const portStatusNotification = new Notification("Port closed")
+    const portStatusNotification = new Notification('Port closed')
     setTimeout(() => portStatusNotification.close(), 3000)
-    const select = document.querySelector("select")
+    const select = document.querySelector('select')
     for (let i = select.options.length - 1; i > 0; i--) select.remove(i)
     void getPorts()
 }

@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8"/>
-    <title>iterm</title>
+    <title>vterm</title>
 </head>
 <body>
 <div>
@@ -15,14 +15,14 @@
         </fieldset>
         <fieldset>
             <label for="baudrate">Baudrate (bps)</label>
-            <input id="baudrate" type="text" placeholder="115200" value="115200"/>
+            <input id="baudrate" name="baudrate" type="text" placeholder="115200" value="115200"/>
         </fieldset>
         <fieldset>
             <label for="delimiter">Delimiter</label>
-            <input id="delimiter" type="text" placeholder="\r\n" value="\r\n"/>
+            <input id="delimiter" name="delimiter" type="text" placeholder="\n" value="\n"/>
         </fieldset>
     </form>
-    <button type="submit" id="connect">
+    <button type="submit" id="start">
         <i class="fa fa-play"></i>
     </button>
     <button type="submit" id="refresh">
@@ -30,6 +30,6 @@
     </button>
 </div>
 <textarea id="output" readonly></textarea>
-<input id="message" type="text"/>
+<input id="message" name="message" type="text"/>
 </body>
 </html>
