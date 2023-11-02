@@ -1,39 +1,41 @@
-/**
- * This file will automatically be loaded by webpack and run in the "renderer" context.
- * To learn more about the differences between the "main" and the "renderer" context in
- * Electron, visit:
- *
- * https://electronjs.org/docs/latest/tutorial/process-model
- *
- * By default, Node.js integration in this file is disabled. When enabling Node.js integration
- * in a renderer process, please be aware of potential security implications. You can read
- * more about security risks here:
- *
- * https://electronjs.org/docs/tutorial/security
- *
- * To enable Node.js integration in this file, open up `main.js` and enable the `nodeIntegration`
- * flag:
- *
- * ```
- *  // Create the browser window.
- *  mainWindow = new BrowserWindow({
- *    width: 800,
- *    height: 600,
- *    webPreferences: {
- *      nodeIntegration: true
- *    }
- *  });
- * ```
- */
-
 import './index.css'
 import '@fortawesome/fontawesome-free/js/all'
 import IpcRendererEvent = Electron.IpcRendererEvent
 
-let isPortOpen = false
+// states are immutable
+const states = Object.freeze({
+    Closed: 'CLOSED',
+    Incoming: 'IN',
+    Outgoing: 'OUT'
+})
+
+const tags = Object.freeze({
+    Error: 'Error',
+    Warning: 'Warning',
+    Status: 'Status'
+})
+
+let state = states.Closed
+
 let delimiter = '\n'
 let inc = 0
 let messages: string[] = []
+
+const portSelector = document.querySelector('select')
+const baudrateInput = document.querySelector(
+    'input[name="baudrate"]'
+) as HTMLInputElement
+const delimiterSelector = document.querySelector(
+    'input[name="delimiter"]'
+) as HTMLInputElement
+const textarea = document.querySelector('textarea')
+const messageInput = document.querySelector(
+    'input[id=message]'
+) as HTMLInputElement
+const startBtn = document.querySelector('button[id=start]') as HTMLButtonElement
+const refreshBtn = document.querySelector(
+    'button[id=refresh]'
+) as HTMLButtonElement
 
 async function getPorts() {
     const ports = await api.getPorts()
@@ -52,92 +54,143 @@ async function getPorts() {
 }
 
 function updateTextarea(data: string) {
-    const textarea = document.querySelector('textarea')
     textarea.value += data
     textarea.scrollTop = textarea.scrollHeight
 }
 
-api.handleRead((_: IpcRendererEvent, data: string) =>
-    updateTextarea('>> ' + data)
-)
+api.handleRead((_: IpcRendererEvent, data: string) => {
+    switch (state) {
+        case states.Outgoing:
+            updateTextarea('>> ' + data)
+            state = states.Incoming
+            break
+        case states.Incoming:
+            updateTextarea(data)
+            break
+        default:
+            break
+    }
+})
 
-document.getElementById('start').onclick = () => {
-    const path = document.querySelector('select').value.split(' ', 1)[0]
-    const baudrate = parseInt(
-        (document.querySelector('input[name="baudrate"]') as HTMLInputElement)
-            .value
-    )
-    delimiter = (
-        document.querySelector('input[name="delimiter"]') as HTMLInputElement
-    ).value
-        .replace(/\\r/g, '\r')
-        .replace(/\\n/g, '\n')
+api.handleError((_: IpcRendererEvent, err: string) => {
+    new Notification('Port handling error', {
+        tag: tags.Error,
+        body: err,
+        requireInteraction: true
+    })
 
-    if (path && baudrate) {
-        isPortOpen = api.setPort(path, baudrate, delimiter)
+    if (err.includes('cannot open')) state = states.Closed
+})
 
-        if (isPortOpen) {
-            const portStatusNotification = new Notification('Device connected!')
-            setTimeout(() => portStatusNotification.close(), 3000)
+startBtn.onclick = () => {
+    if (state === states.Closed) {
+        const path = portSelector.value.split(' ', 1)[0]
+        const baudrate = parseInt(baudrateInput.value)
+        delimiter = delimiterSelector.value
+            .replace(/\\r/g, '\r')
+            .replace(/\\n/g, '\n')
+
+        if (path && baudrate) {
+            if (api.setPort(path, baudrate, delimiter)) {
+                state = states.Outgoing
+                const portStatusNotification = new Notification(
+                    'Device connected!',
+                    {
+                        tag: tags.Status
+                    }
+                )
+                setTimeout(() => portStatusNotification.close(), 2000)
+            } else {
+                const portStatusNotification = new Notification(
+                    'Unable to connect device',
+                    {
+                        tag: tags.Error,
+                        body: 'Check that the comport is not open in another application'
+                    }
+                )
+                setTimeout(() => portStatusNotification.close(), 4000)
+            }
         } else {
-            const portStatusNotification = new Notification(
-                'Unable to connect device...',
+            const missingDataNotification = new Notification(
+                'Missing device or baudrate data',
                 {
-                    body: 'Check that comport is not open in another application.'
+                    tag: tags.Warning
                 }
             )
-            setTimeout(() => portStatusNotification.close(), 3000)
+            setTimeout(() => missingDataNotification.close(), 3000)
         }
     } else {
-        const missingDataNotification = new Notification(
-            'Missing device or baudrate data'
+        const connectionErrorNotification = new Notification(
+            'Device already connected',
+            {
+                tag: tags.Warning,
+                body: 'Please refresh to close port'
+            }
         )
-        setTimeout(() => missingDataNotification.close(), 3000)
+        setTimeout(() => connectionErrorNotification.close(), 4000)
     }
 }
 
-document.getElementById('message').onkeydown = (e: KeyboardEvent) => {
+messageInput.onkeydown = (e: KeyboardEvent) => {
     if (e.key == 'Enter') {
         e.preventDefault()
-        if (isPortOpen) {
-            const input = document.getElementById('message') as HTMLInputElement
-            const data = input.value
-
+        if (state !== states.Closed) {
+            const data = messageInput.value
             if (data) {
                 api.invokeWrite(data + delimiter)
-                updateTextarea('<< ' + data + '\n')
+                switch (state) {
+                    case states.Outgoing:
+                        updateTextarea('<< ' + data + '\n')
+                        break
+                    case states.Incoming:
+                        updateTextarea('\n<< ' + data + '\n')
+                        state = states.Outgoing
+                        break
+                    default:
+                        break
+                }
+
                 if (data != messages[messages.length - 1]) messages.push(data)
                 inc = 0
-                input.value = ''
+                messageInput.value = ''
             }
         }
     } else if (e.key == 'ArrowUp' && messages.length) {
         e.preventDefault()
-        const input = document.getElementById('message') as HTMLInputElement
         if (inc < messages.length) inc++
-        input.value = messages[messages.length - inc]
+        messageInput.value = messages[messages.length - inc]
     } else if (e.key == 'ArrowDown' && messages.length) {
         e.preventDefault()
-        const input = document.getElementById('message') as HTMLInputElement
         if (inc > 0) inc--
-        if (!inc) input.value = ''
-        else input.value = messages[messages.length - inc]
+        if (!inc) messageInput.value = ''
+        else messageInput.value = messages[messages.length - inc]
     }
-    console.log(inc)
 }
 
-document.getElementById('refresh').onclick = () => {
-    const textarea = document.getElementById('output') as HTMLTextAreaElement
+refreshBtn.onclick = () => {
     textarea.value = ''
     messages = []
-    api.closePort()
-    isPortOpen = false
 
-    const portStatusNotification = new Notification('Port closed')
-    setTimeout(() => portStatusNotification.close(), 3000)
-    const select = document.querySelector('select')
-    for (let i = select.options.length - 1; i > 0; i--) select.remove(i)
+    if (state !== states.Closed) {
+        api.closePort()
+
+        const portStatusNotification = new Notification('Port closed', {
+            tag: tags.Status
+        })
+        setTimeout(() => portStatusNotification.close(), 2000)
+    }
+
+    state = states.Closed
+
+    // refresh port selection
+    for (let i = portSelector.options.length - 1; i > 0; i--)
+        portSelector.remove(i)
     void getPorts()
+
+    const portRefreshNotification = new Notification('Port list updated', {
+        tag: tags.Status
+    })
+    setTimeout(() => portRefreshNotification.close(), 4000)
 }
 
 void getPorts() // Search for ports on startup

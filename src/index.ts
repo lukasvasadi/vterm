@@ -40,7 +40,7 @@ const createWindow = (): BrowserWindow => {
     return mainWindow
 }
 
-function close_port() {
+function closePort() {
     try {
         if (port.isOpen) port.close()
     } catch (err) {
@@ -67,24 +67,24 @@ function registerHandlers() {
                     const parser = port.pipe(
                         new ReadlineParser({
                             delimiter: delimiter,
-                            includeDelimiter: true
+                            includeDelimiter: false
                         })
                     )
-                    parser.on('data', (data) => {
+                    parser.on('data', (data: string) => {
                         win.webContents.send('get-data', data)
                     })
                 } else {
                     port.on('data', (data: string) => {
-                        win.webContents.send('get-data', data)
+                        win.webContents.send('get-data', data.toString())
                     })
                 }
 
                 port.on('error', (err) => {
-                    console.log(err)
+                    win.webContents.send('get-error', err.message)
                 })
                 return port.isOpen
             } catch (err) {
-                console.log(`Error: ${err.message}`)
+                win.webContents.send('get-error', err.message)
             }
         }
     )
@@ -93,7 +93,7 @@ function registerHandlers() {
         return port.write(data)
     })
 
-    ipcMain.on('close-port', (): void => close_port())
+    ipcMain.on('close-port', (): void => closePort())
 }
 
 /**
@@ -114,7 +114,7 @@ app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {
         app.quit()
     }
-    close_port()
+    closePort()
 })
 
 app.on('activate', () => {

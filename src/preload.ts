@@ -8,5 +8,7 @@ contextBridge.exposeInMainWorld('api', {
     invokeWrite: (data: string) => ipcRenderer.invoke('send-data', data),
     handleRead: (callback: (_: IpcRendererEvent, data: string) => void) =>
         ipcRenderer.on('get-data', callback),
+    handleError: (callback: (_: IpcRendererEvent, err: string) => void) =>
+        ipcRenderer.on('get-error', callback),
     closePort: () => ipcRenderer.send('close-port')
 })

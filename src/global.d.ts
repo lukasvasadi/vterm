@@ -13,5 +13,9 @@ declare namespace api {
         callback: (_: IpcRendererEvent, data: string) => void
     ): string
 
+    function handleError(
+        callback: (_: IpcRendererEvent, err: string) => void
+    ): string
+
     function closePort(): void
 }
